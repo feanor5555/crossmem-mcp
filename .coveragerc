@@ -1,0 +1,16 @@
+# Default-CI coverage profile (task 21.10).
+#
+# The default CI matrix in ``.github/workflows/ci.yml`` does NOT install the
+# optional ``[chroma]`` / ``[qdrant]`` extras to keep PR runs fast. Their
+# dedicated test files skip cleanly without the extras, so measuring the
+# backend modules in that job would record them as 0% executed and bury
+# the overall coverage signal under ~535 permanently-unmeasured lines.
+#
+# The nightly ``optional-backends`` job installs both extras and runs
+# pytest WITHOUT ``--cov-config=.coveragerc``, so its coverage report
+# falls back to ``pyproject.toml`` (no omit) and the optional backends
+# count toward ``--cov-fail-under=90`` in nightly.
+[run]
+omit =
+    src/crossmem/backends/chroma_backend.py
+    src/crossmem/backends/qdrant_backend.py

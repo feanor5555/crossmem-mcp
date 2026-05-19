@@ -1,0 +1,87 @@
+# Windows base image for the CrossMem E2E suite (task 27.2).
+#
+# Mirror of ``Dockerfile.linux`` for the Windows column of the matrix.
+# The image carries everything a scenario script under
+# ``tests/e2e/docker/scenarios/*`` needs to install and exercise
+# CrossMem against a fake CLI config without reaching the network at
+# run time:
+#
+#   * a stable Python 3 runtime + ``pipx`` so the working-copy can be
+#     installed once at build time;
+#   * the CrossMem working-copy itself, baked in via ``pipx install``
+#     so each container starts with the binary on ``PATH``;
+#   * PowerShell as the default ``SHELL`` so multi-line ``RUN``
+#     instructions get strict error handling
+#     (``$ErrorActionPreference = 'Stop'``) and the scenario scripts
+#     under ``scenarios/*/*.ps1`` execute the same way at build time
+#     and run time.
+#
+# Build context = the repository root (``docker build`` is driven by
+# ``tests/e2e/run_all.ps1``). ``mcr.microsoft.com/windows/servercore:
+# ltsc2022`` is pinned by the spec: it is the current Windows LTS,
+# matches the ``windows-2022`` GitHub-hosted runners byte-for-byte, and
+# carries the full Win32 surface that pipx + Python need.
+# ``nanoserver`` is rejected because it lacks MSI installer support
+# and a Win32 shell, both of which the Python installer relies on.
+FROM mcr.microsoft.com/windows/servercore:ltsc2022
+
+# PowerShell is the *de facto* shell for Windows containers. Without
+# this directive every ``RUN`` defaults to ``cmd /S /C``, which makes
+# multi-line installers painful to express and silently swallows
+# non-zero exits unless ``$ErrorActionPreference`` is set inline on
+# every line. Declaring it once at the top is the standard idiom and
+# matches what the spec's "PowerShell-Dev-Tools" implies.
+SHELL ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", "$ErrorActionPreference='Stop'; $ProgressPreference='SilentlyContinue';"]
+
+# Pinning Python 3.12 here keeps the image deterministic. The Linux
+# sibling lets ``apt`` resolve whatever ``python3`` ships with the
+# Debian release, which is fine because Debian's archive is itself
+# pinned to ``bookworm-slim``. The Windows MSI URL is versioned, so
+# we follow the same "pin once, upgrade explicitly" rule.
+ENV PYTHON_VERSION=3.12.7 \
+    PYTHON_URL=https://www.python.org/ftp/python/3.12.7/python-3.12.7-amd64.exe \
+    PIPX_HOME=C:\\pipx \
+    PIPX_BIN_DIR=C:\\pipx\\bin
+
+# Install Python + pipx + PowerShell-Dev-Tools (PSScriptAnalyzer +
+# Pester, both used by downstream scenario scripts for linting and
+# unit-style assertions inside the container). Each step ends with
+# ``if (-not $?) { exit 1 }`` for belt-and-braces — the SHELL line
+# already enables ``-ErrorAction Stop``, but ``Start-Process`` returns
+# its own exit code via ``ExitCode`` which is not picked up by
+# ``$ErrorActionPreference``.
+RUN Invoke-WebRequest -Uri $env:PYTHON_URL -OutFile python-installer.exe ; \
+    Start-Process -FilePath .\\python-installer.exe \
+        -ArgumentList '/quiet','InstallAllUsers=1','PrependPath=1','Include_test=0' \
+        -Wait -NoNewWindow ; \
+    if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne $null) { exit $LASTEXITCODE } ; \
+    Remove-Item python-installer.exe ; \
+    $env:PATH = 'C:\\Program Files\\Python312;C:\\Program Files\\Python312\\Scripts;' + $env:PATH ; \
+    [Environment]::SetEnvironmentVariable('PATH', $env:PATH, [EnvironmentVariableTarget]::Machine) ; \
+    python -m pip install --no-cache-dir --upgrade pip ; \
+    python -m pip install --no-cache-dir pipx ; \
+    python -m pipx ensurepath ; \
+    Install-PackageProvider -Name NuGet -Force -Scope AllUsers | Out-Null ; \
+    Set-PSRepository -Name PSGallery -InstallationPolicy Trusted ; \
+    Install-Module -Name PSScriptAnalyzer -Force -Scope AllUsers ; \
+    Install-Module -Name Pester -Force -Scope AllUsers -SkipPublisherCheck
+
+# Copy the working-copy into a stable location. We copy only the files
+# needed to build the wheel (``pyproject.toml`` + ``src/`` +
+# ``README.md`` + ``LICENSE``) so that an edit to an unrelated test
+# file does not bust the install layer's cache.
+WORKDIR C:\\crossmem-src
+COPY pyproject.toml README.md LICENSE ./
+COPY src ./src
+
+# Non-editable install — the editable-install-guard in CLAUDE.md
+# forbids ``pip install -e`` for crossmem source trees. ``pipx`` gives
+# us a clean isolated venv under ``C:\pipx\venvs\crossmem`` with the
+# ``crossmem`` entry-point linked into ``C:\pipx\bin``.
+RUN python -m pipx install C:\\crossmem-src
+
+# Scenarios mount themselves at C:\scenarios; the smoke scenario is
+# also baked into the image as a self-test ("does this image even
+# work?").
+WORKDIR C:\\work
+CMD ["powershell", "-NoProfile"]

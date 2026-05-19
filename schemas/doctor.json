@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://crossmem.dev/schemas/doctor.json",
+  "title": "crossmem doctor --json output",
+  "description": "Stable schema for the JSON output of `crossmem doctor --json`. Keys defined here MUST NOT be renamed or removed between minor versions of crossmem; new keys MAY be added (additive evolution). Consumers should ignore unknown keys.",
+  "type": "object",
+  "required": ["version", "checks", "summary"],
+  "additionalProperties": true,
+  "properties": {
+    "version": {
+      "description": "Schema version. Bumped on breaking changes only; additive changes leave it unchanged.",
+      "type": "string",
+      "const": "1"
+    },
+    "checks": {
+      "description": "Ordered list of check results. Order is stable across runs for a given crossmem version.",
+      "type": "array",
+      "items": {"$ref": "#/$defs/check"}
+    },
+    "summary": {
+      "description": "Aggregate counts across `checks`. `total` equals `ok + warn + fail`.",
+      "type": "object",
+      "required": ["ok", "warn", "fail", "total"],
+      "additionalProperties": false,
+      "properties": {
+        "ok":    {"type": "integer", "minimum": 0},
+        "warn":  {"type": "integer", "minimum": 0},
+        "fail":  {"type": "integer", "minimum": 0},
+        "total": {"type": "integer", "minimum": 0}
+      }
+    },
+    "support": {
+      "description": "Project support metadata surfaced for LLM-driven install flows (task 19.1). The `issues_url` key is the contract referenced by `skills/crossmem-install/SKILL.md`; `docs_url` and `version` are informational companions. Additive — consumers MUST treat the block as optional.",
+      "type": "object",
+      "required": ["issues_url"],
+      "additionalProperties": true,
+      "properties": {
+        "issues_url": {
+          "description": "Canonical issue tracker URL for crossmem.",
+          "type": "string",
+          "format": "uri"
+        },
+        "docs_url": {
+          "description": "Canonical documentation / project home URL.",
+          "type": "string",
+          "format": "uri"
+        },
+        "version": {
+          "description": "Installed crossmem package version (importlib.metadata).",
+          "type": "string"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "check": {
+      "type": "object",
+      "required": ["name", "status", "detail"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "description": "Stable identifier of the check (snake_case). Existing names MUST NOT be renamed across versions; new checks MAY be added.",
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "status": {
+          "description": "Tri-state outcome. `ok` = requirement satisfied; `warn` = informational (e.g. optional dep missing); `fail` = user action required before crossmem can run.",
+          "type": "string",
+          "enum": ["ok", "warn", "fail"]
+        },
+        "detail": {
+          "description": "Human-readable explanation. Format is not stable; consumers MUST NOT parse it.",
+          "type": "string"
+        }
+      }
+    }
+  }
+}

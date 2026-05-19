@@ -1,0 +1,30 @@
+# crossmem
+
+> crossmem is a portable, offline-first knowledge database for MCP-capable AI
+> coding CLIs. A single SQLite file backs hybrid (FTS5 + vector) search across
+> twelve supported clients, with no cloud dependency and no vendor lock-in.
+
+## Installation
+
+The files below are LLM-addressed install guides — one per supported CLI.
+Each guide is idempotent and ends with a `crossmem doctor` self-check plus
+an MCP round-trip.
+
+- [Amazon Q CLI](install/amazonq.md)
+- [Claude Code](install/claude_code.md)
+- [Cline](install/cline.md)
+- [Continue.dev](install/continuedev.md)
+- [Cursor](install/cursor.md)
+- [Gemini CLI](install/gemini.md)
+- [Goose](install/goose.md)
+- [Kilo Code](install/kilocode.md)
+- [OpenCode](install/opencode.md)
+- [Pi](install/pi.md)
+- [Windsurf](install/windsurf.md)
+- [Zed](install/zed.md)
+
+## Concepts
+
+- [Project overview and architecture](CLAUDE.md)
+- [Install guide index](install/README.md)
+- [Per-CLI install guide schema](install/_template.md)

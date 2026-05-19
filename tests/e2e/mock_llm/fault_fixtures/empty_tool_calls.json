@@ -1,0 +1,18 @@
+{
+  "endpoint": "/v1/messages",
+  "match": {
+    "user_contains": "empty-tool-calls"
+  },
+  "response": {
+    "id": "msg_empty_tool_calls",
+    "type": "message",
+    "role": "assistant",
+    "model": "mock-claude",
+    "stop_reason": "end_turn",
+    "content": [],
+    "usage": {
+      "input_tokens": 4,
+      "output_tokens": 0
+    }
+  }
+}

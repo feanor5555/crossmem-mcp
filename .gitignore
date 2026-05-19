@@ -1,0 +1,17 @@
+.coverage
+__pycache__/
+*.pyc
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+.pytest_cache/
+.ruff_cache/
+.env
+# Explicit pin for e2e secrets (covered by .env above, listed for clarity)
+tests/e2e/.env
+!tests/e2e/.env.example
+.claude/
+/CLAUDE.md
+reviews/

@@ -1,0 +1,150 @@
+name: Nightly
+
+# Optional backends (ChromaDB, Qdrant) are excluded from the default CI matrix
+# to keep PR runs fast. This nightly job exercises them against real service
+# containers, matching the production deployment shape described in
+# ``CLAUDE.md`` (section ``## Testbarkeit`` -> ``### CI``).
+
+on:
+  schedule:
+    # 03:17 UTC daily — off-peak, avoids the top-of-the-hour cron stampede.
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  optional-backends:
+    name: ChromaDB + Qdrant integration (py3.12)
+    runs-on: ubuntu-latest
+
+    env:
+      CROSSMEM_EMBEDDING_MODEL: "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+      CROSSMEM_EMBEDDING_MODEL_VERSION: "v1"
+      PYTHONUTF8: "1"
+      CROSSMEM_CHROMA_URL: "http://localhost:8000"
+      CROSSMEM_QDRANT_URL: "http://localhost:6333"
+
+    services:
+      chroma:
+        image: chromadb/chroma:latest
+        ports:
+          - 8000:8000
+        options: >-
+          --health-cmd "curl -fsS http://localhost:8000/api/v1/heartbeat || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 12
+      qdrant:
+        image: qdrant/qdrant:latest
+        ports:
+          - 6333:6333
+          - 6334:6334
+        options: >-
+          --health-cmd "bash -c '</dev/tcp/localhost/6333'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 12
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Cache fastembed / huggingface model
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: fastembed-Linux-${{ env.CROSSMEM_EMBEDDING_MODEL }}-${{ env.CROSSMEM_EMBEDDING_MODEL_VERSION }}
+          restore-keys: |
+            fastembed-Linux-${{ env.CROSSMEM_EMBEDDING_MODEL }}-
+            fastembed-Linux-
+
+      - name: Install project with [chroma] and [qdrant] extras
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install ".[dev,chroma,qdrant]"
+
+      - name: Test (full suite incl. optional backends)
+        # Task 21.10 — this job is the only one that installs
+        # ``[chroma,qdrant]``, so it is the only one that can MEASURE the
+        # optional backends honestly. The default CI matrix omits them via
+        # ``--cov-config=.coveragerc`` because the extras are not present
+        # there. Here we deliberately drop ``--cov-config`` so coverage
+        # falls back to ``pyproject.toml`` (which carries no omit) and the
+        # ~535 lines of ``chroma_backend.py`` + ``qdrant_backend.py`` count
+        # toward ``--cov-fail-under=90``.
+        #
+        # Task 22.8 — ``not workflow`` excludes the YAML-only regression
+        # tests from the coverage gate; they are exercised separately in
+        # the next step (and in default CI) so any drift still fails the
+        # build without inflating coverage here.
+        env:
+          PYTHONPATH: ${{ github.workspace }}/src
+        run: pytest --cov=crossmem --cov-fail-under=90 -m "not network and not benchmark and not smoke and not workflow"
+
+      - name: Test (workflow regression tests)
+        # Task 22.8 — see ``ci.yml`` for the rationale. Runs ``tests/
+        # test_workflows.py`` without coverage so drift in ``.github/
+        # workflows/*.yml`` still breaks nightly.
+        env:
+          PYTHONPATH: ${{ github.workspace }}/src
+        run: pytest -m workflow
+
+  docker-smoke:
+    # Task 13.3 — End-to-End smoke on a freshly-pulled ``ubuntu:24.04``
+    # container. Validates that the *published* wheel installs and runs on a
+    # clean system (catches missing package_data, broken console-scripts,
+    # editable-install assumptions) — orthogonal to the source-tree CI in
+    # ``ci.yml``. The same job both builds the wheel and consumes it so the
+    # artefact lineage is self-contained: no upload/download round-trip, no
+    # confusion about which wheel was tested.
+    name: Docker end-to-end smoke (ubuntu:24.04)
+    runs-on: ubuntu-latest
+
+    env:
+      PYTHONUTF8: "1"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install build + pytest
+        # Only what the smoke test runner needs on the host. ``build`` is
+        # used to produce the wheel; ``pyyaml`` is a transitive dep of the
+        # workflow tests; the rest live inside the container.
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install build pytest pyyaml
+
+      - name: Build wheel
+        # Pre-build the wheel here (rather than from inside the smoke test)
+        # so a build failure shows up as its own log line, separate from
+        # container provisioning. The smoke test still tolerates being
+        # invoked without a prebuilt wheel — it falls back to building one
+        # in its temp dir — but pre-building keeps CI logs grep-able.
+        run: python -m build --wheel --outdir dist
+
+      - name: Run end-to-end smoke inside ubuntu:24.04
+        env:
+          # Opt-in flag honoured by ``tests/smoke/test_docker_smoke.py``;
+          # without this the test skips itself so contributors who run
+          # ``pytest`` on a Docker-less laptop never see a spurious failure.
+          CROSSMEM_RUN_SMOKE: "1"
+          PYTHONPATH: ${{ github.workspace }}/src
+        run: pytest -m smoke tests/smoke

@@ -1,0 +1,38 @@
+default_install_hook_types: [pre-commit, pre-push, commit-msg]
+
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.11.12
+    hooks:
+      - id: ruff-format
+      - id: ruff
+        args: [--fix]
+
+  - repo: local
+    hooks:
+      - id: editable-install-guard
+        name: editable-install guard
+        entry: python tools/check_editable_install.py
+        language: system
+        always_run: true
+        pass_filenames: false
+        stages: [pre-push]
+
+      # Lightweight ruff lint gate on pre-push — sub-second, catches the
+      # common case of pushing code that ruff would reject in CI. Heavy
+      # checks (full pytest with coverage, pip-audit, install-docs,
+      # install/skills tests) have moved to ``tools/verify.py`` and are
+      # run on demand instead of blocking every push.
+      - id: ruff-check
+        name: ruff check
+        entry: python -m ruff check .
+        language: system
+        always_run: true
+        pass_filenames: false
+        stages: [pre-push]
+
+      - id: conventional-commit
+        name: conventional commit check
+        entry: python tools/check_commit_msg.py
+        language: system
+        stages: [commit-msg]

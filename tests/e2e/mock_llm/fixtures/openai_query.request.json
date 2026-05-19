@@ -1,0 +1,26 @@
+{
+  "model": "mock-gpt",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Please query the crossmem knowledge base for the stored mock document."
+    }
+  ],
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "crossmem.query",
+        "description": "Query the crossmem knowledge base.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "query": {"type": "string"},
+            "top_k": {"type": "integer"}
+          },
+          "required": ["query"]
+        }
+      }
+    }
+  ]
+}

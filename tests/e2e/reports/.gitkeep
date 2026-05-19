@@ -1,0 +1,6 @@
+# This file keeps the reports/ directory alive in git so a fresh
+# clone has somewhere to write the JSON output of run_all.sh /
+# run_all.ps1 (tasks 27.1 / 27.2). Real reports written here are
+# intentionally NOT gitignored: developers running the suite locally
+# may want to attach a failing report to a bug. CI cleans the
+# directory between runs.

@@ -1,0 +1,15 @@
+{
+  "endpoint": "/v1/messages",
+  "match": {
+    "user_contains": "timeout"
+  },
+  "response": {
+    "id": "msg_slow",
+    "type": "message",
+    "role": "assistant",
+    "model": "mock-claude",
+    "stop_reason": "end_turn",
+    "content": []
+  },
+  "delay_s": 0.4
+}

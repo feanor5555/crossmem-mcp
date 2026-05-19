@@ -1,0 +1,26 @@
+{
+  "model": "mock-claude",
+  "max_tokens": 256,
+  "messages": [
+    {
+      "role": "user",
+      "content": "Please store this mock document via the crossmem.store tool."
+    }
+  ],
+  "tools": [
+    {
+      "name": "crossmem.store",
+      "description": "Store a document in the crossmem knowledge base.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "content": {"type": "string"},
+          "source_url": {"type": "string"},
+          "title": {"type": "string"},
+          "source_type": {"type": "string"}
+        },
+        "required": ["content", "source_url"]
+      }
+    }
+  ]
+}

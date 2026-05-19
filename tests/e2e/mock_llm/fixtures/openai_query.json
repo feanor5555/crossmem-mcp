@@ -1,0 +1,37 @@
+{
+  "endpoint": "/v1/chat/completions",
+  "match": {
+    "user_contains": "query"
+  },
+  "response": {
+    "id": "chatcmpl-mock-query-0001",
+    "object": "chat.completion",
+    "created": 1700000000,
+    "model": "mock-gpt",
+    "choices": [
+      {
+        "index": 0,
+        "finish_reason": "tool_calls",
+        "message": {
+          "role": "assistant",
+          "content": null,
+          "tool_calls": [
+            {
+              "id": "call_mock_query_0001",
+              "type": "function",
+              "function": {
+                "name": "crossmem.query",
+                "arguments": "{\"query\": \"mock document\", \"top_k\": 5}"
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 24,
+      "completion_tokens": 48,
+      "total_tokens": 72
+    }
+  }
+}

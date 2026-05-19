@@ -1,0 +1,13 @@
+{
+  "endpoint": "/v1/messages",
+  "match": {
+    "user_contains": "http-5xx"
+  },
+  "response": {
+    "error": {
+      "type": "server_error",
+      "message": "deliberately injected 5xx for e2e fault testing"
+    }
+  },
+  "status_code": 503
+}

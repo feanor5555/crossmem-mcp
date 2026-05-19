@@ -1,0 +1,125 @@
+name: CI
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: ${{ matrix.os }} / py${{ matrix.python-version }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-13, macos-latest]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+
+    env:
+      # Cache key bumped when the embedding model identity changes.
+      # Model: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2 (384-dim).
+      CROSSMEM_EMBEDDING_MODEL: "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+      CROSSMEM_EMBEDDING_MODEL_VERSION: "v1"
+      PYTHONUTF8: "1"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Resolve fastembed cache directory
+        id: cache-paths
+        shell: bash
+        run: |
+          case "${{ runner.os }}" in
+            Linux)   echo "fastembed_dir=$HOME/.cache/huggingface"            >> "$GITHUB_OUTPUT" ;;
+            macOS)   echo "fastembed_dir=$HOME/.cache/huggingface"            >> "$GITHUB_OUTPUT" ;;
+            Windows) echo "fastembed_dir=$LOCALAPPDATA\\huggingface\\cache"   >> "$GITHUB_OUTPUT" ;;
+          esac
+
+      - name: Cache fastembed / huggingface model
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.cache-paths.outputs.fastembed_dir }}
+          key: fastembed-${{ runner.os }}-${{ env.CROSSMEM_EMBEDDING_MODEL }}-${{ env.CROSSMEM_EMBEDDING_MODEL_VERSION }}
+          restore-keys: |
+            fastembed-${{ runner.os }}-${{ env.CROSSMEM_EMBEDDING_MODEL }}-
+            fastembed-${{ runner.os }}-
+
+      - name: Install project (dev extras)
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install ".[dev]"
+
+      - name: Lint (ruff format check)
+        run: ruff format --check src tests
+
+      - name: Lint (ruff check)
+        run: ruff check src tests
+
+      - name: Test (pytest, no network / no benchmark / no workflow)
+        # Coverage flags moved out of pyproject.toml addopts (task 19.2):
+        # local ``pytest`` runs without coverage so callers can pass their
+        # own ``--cov=...`` without double-measurement. CI is the gate, so
+        # ``--cov=crossmem --cov-fail-under=90`` is set explicitly here.
+        #
+        # ``--cov-config=.coveragerc`` (task 21.10) opts into the
+        # default-CI profile that omits the optional ``chroma_backend``
+        # and ``qdrant_backend`` modules — this matrix does not install
+        # ``[chroma,qdrant]`` so those modules would otherwise drag the
+        # overall percentage well below 90% from their unmeasured lines.
+        # The nightly ``optional-backends`` job installs the extras and
+        # deliberately omits ``--cov-config`` so it measures them.
+        #
+        # Task 22.8 — ``not workflow`` excludes ``tests/test_workflows.py``
+        # from the coverage gate. Those tests only parse YAML and exercise
+        # no ``crossmem`` code, so they inflate coverage by touching
+        # end-to-end paths that other tests measure honestly. The next
+        # step (``Test (workflow regression tests)``) runs them separately
+        # without coverage so any drift in ``.github/workflows/*.yml``
+        # still fails the build.
+        shell: bash
+        env:
+          PYTHONPATH: ${{ github.workspace }}/src
+        run: pytest --cov=crossmem --cov-config=.coveragerc --cov-fail-under=90 -m "not network and not benchmark and not workflow"
+
+      - name: Test (workflow regression tests)
+        # Task 22.8 — runs ``tests/test_workflows.py`` (marker: workflow)
+        # without coverage. These tests assert structural invariants on
+        # ``.github/workflows/*.yml`` and must still fail the build on
+        # drift, but they have no business inflating the coverage report
+        # for the production code measured in the previous step.
+        shell: bash
+        env:
+          PYTHONPATH: ${{ github.workspace }}/src
+        run: pytest -m workflow
+
+  security:
+    name: pip-audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install pip-audit
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pip-audit
+
+      - name: Run pip-audit on declared dependencies
+        run: pip-audit --strict --disable-pip --progress-spinner off

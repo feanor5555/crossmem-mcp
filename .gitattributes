@@ -1,0 +1,8 @@
+# Force LF line endings for shell scripts and Dockerfiles. Without
+# this attribute a Windows host with the default ``core.autocrlf=true``
+# rewrites the working-copy to CRLF on checkout, which makes
+# ``#!/usr/bin/env bash\r`` an unresolvable shebang the moment the
+# script reaches a Linux runner (the container in ``run_all.sh``, the
+# CI matrix). LF is the only line-ending that round-trips safely.
+*.sh        text eol=lf
+Dockerfile* text eol=lf

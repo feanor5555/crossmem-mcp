@@ -1,0 +1,111 @@
+[build-system]
+requires = ["setuptools>=68.0", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "crossmem"
+version = "0.1.0"
+description = "Portable, offline-first knowledge database for MCP-capable AI coding CLIs."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "GPL-3.0-or-later"
+authors = [{ name = "feanor5555", email = "2073406+feanor5555@users.noreply.github.com" }]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Database",
+]
+dependencies = [
+    "fastembed>=0.6",
+    "sqlite-vec>=0.1.6",
+    "fastmcp>=2.0",
+    "beautifulsoup4>=4.12",
+    "httpx>=0.27",
+    "pyyaml>=6.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/feanor5555/knowledge"
+Source = "https://github.com/feanor5555/knowledge"
+Issues = "https://github.com/feanor5555/knowledge/issues"
+
+[project.scripts]
+crossmem = "crossmem.cli:main"
+
+[project.optional-dependencies]
+chroma = ["chromadb>=0.6"]
+qdrant = ["qdrant-client>=1.12"]
+# Task 27.3 — end-to-end test harness. The mock LLM server in
+# ``tests/e2e/mock_llm/`` deliberately uses stdlib only (no FastAPI /
+# Starlette), so this group starts empty. Later 27.x tasks (Docker
+# scenarios, CLI roundtrips) will append their helpers here as they
+# land. The group must exist now so docs and CI can refer to a stable
+# extra name (``pip install crossmem[e2e]``).
+e2e = []
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "pytest-cov",
+    "pytest-benchmark",
+    "pytest-httpx>=0.30",
+    "responses",
+    "freezegun",
+    "jsonschema>=4.0",
+    "ruff",
+    "pre-commit",
+    # Task 25.3 — pre-push hook ``pip-audit`` runs ``pip-audit --strict``
+    # locally before every push (replaces the retired ``security`` CI job).
+    "pip-audit",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "A", "SIM", "TCH"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# NOTE (task 19.2): ``--cov`` / ``--cov-fail-under`` deliberately NOT pinned
+# here. Local ``pytest`` runs without coverage (fast); the CI ``test`` job
+# in ``.github/workflows/ci.yml`` invokes pytest with the coverage flags
+# explicitly. Pinning them in addopts caused silent double-measurement
+# whenever a caller passed its own ``--cov=...`` — the second pass starts
+# at 0% and trips ``--cov-fail-under`` even on a fully-green run.
+addopts = "--tb=short -q"
+markers = [
+    "network: tests that require live network access (skipped in default CI)",
+    "benchmark: performance benchmarks (skipped in default CI)",
+    "smoke: end-to-end smoke tests (require docker; gated by CROSSMEM_RUN_SMOKE=1)",
+    "workflow: GitHub Actions workflow regression tests (excluded from --cov-fail-under gate; run separately in CI)",
+]
+
+# NOTE (task 21.10): no ``[tool.coverage.run]`` section. Coverage profiles
+# live in per-job config files so the optional ``chroma``/``qdrant``
+# backends are measured wherever their extras are installed.
+#
+#   * Default CI (``.github/workflows/ci.yml``) runs without the extras
+#     and passes ``--cov-config=.coveragerc`` — that profile omits the
+#     two optional backends; otherwise their ~535 unmeasured lines would
+#     permanently drag the overall percentage below 90%.
+#   * Nightly (``.github/workflows/nightly.yml`` ``optional-backends``
+#     job) installs ``[chroma,qdrant]`` and runs pytest with
+#     ``--cov=crossmem --cov-fail-under=90`` *without* ``--cov-config``.
+#     With no omit configured here, the optional backends count toward
+#     the gate.
+#
+# Keeping the omit out of pyproject.toml means a stray caller that drops
+# ``--cov-config`` never silently buries the optional backends from the
+# report.

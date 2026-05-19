@@ -1,0 +1,9 @@
+{
+  "endpoint": "/v1/messages",
+  "match": {
+    "user_contains": "broken-json"
+  },
+  "response": {},
+  "status_code": 200,
+  "raw_body": "{this is not valid json\""
+}

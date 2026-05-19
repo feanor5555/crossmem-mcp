@@ -1,0 +1,60 @@
+# Linux base image for the CrossMem E2E suite (task 27.1).
+#
+# The image carries everything a scenario script under
+# ``tests/e2e/docker/scenarios/*`` needs to install and exercise
+# CrossMem against a fake CLI config without reaching the network at
+# run time:
+#
+#   * a stable Python 3 runtime + ``pipx`` + ``ca-certificates`` so
+#     ``pipx install`` can resolve TLS for any source that does need
+#     the network during scenario execution;
+#   * ``bash`` (Debian-slim does not ship bash by default — the
+#     scenario scripts use ``[[ ... ]]`` so this is non-negotiable);
+#   * the CrossMem working-copy itself, baked in via ``pipx install``
+#     so each container starts with the binary on ``PATH`` and the
+#     scenarios do not pay an install cost per run.
+#
+# Build context = the repository root (``docker build`` is driven by
+# ``tests/e2e/run_all.sh`` so the path is hidden from the user).
+# ``debian:bookworm-slim`` is pinned: it is the current LTS, ~30MB
+# compressed, and matches the ``ubuntu-latest`` GitHub runners closely
+# enough that scenario reproductions on either host stay comparable.
+FROM debian:bookworm-slim
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PIPX_HOME=/opt/pipx \
+    PIPX_BIN_DIR=/usr/local/bin \
+    PATH=/usr/local/bin:$PATH
+
+# Single RUN keeps the layer count low and lets us prune the apt cache
+# inside the same layer; otherwise the cache would survive in an
+# earlier layer and bloat the final image by ~40MB of metadata.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        python3 \
+        python3-pip \
+        python3-venv \
+        pipx \
+        bash \
+        ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy the working-copy into a stable location. We copy only the
+# files needed to build the wheel (``pyproject.toml`` + ``src/`` +
+# ``README.md`` + ``LICENSE``) so that an edit to an unrelated test
+# file does not bust the install layer's cache. The .dockerignore (if
+# present at the repo root) further trims the context.
+WORKDIR /opt/crossmem-src
+COPY pyproject.toml README.md LICENSE ./
+COPY src ./src
+
+# Non-editable install — the editable-install-guard in CLAUDE.md
+# forbids ``pip install -e`` for crossmem source trees. ``pipx`` gives
+# us a clean isolated venv at ``/opt/pipx/venvs/crossmem`` with the
+# ``crossmem`` entry-point linked into ``/usr/local/bin``.
+RUN pipx install /opt/crossmem-src
+
+# Scenarios mount themselves at /scenarios; the smoke scenario is also
+# baked into the image as a self-test ("does this image even work?").
+WORKDIR /work
+CMD ["bash"]

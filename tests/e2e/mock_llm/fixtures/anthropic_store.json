@@ -1,0 +1,31 @@
+{
+  "endpoint": "/v1/messages",
+  "match": {
+    "user_contains": "store"
+  },
+  "response": {
+    "id": "msg_mock_store_0001",
+    "type": "message",
+    "role": "assistant",
+    "model": "mock-claude",
+    "stop_reason": "tool_use",
+    "stop_sequence": null,
+    "content": [
+      {
+        "type": "tool_use",
+        "id": "toolu_mock_store_0001",
+        "name": "crossmem.store",
+        "input": {
+          "content": "Mock document body for e2e roundtrip testing.",
+          "source_url": "https://example.invalid/mock/anthropic-store",
+          "title": "Mock Anthropic Store Doc",
+          "source_type": "web"
+        }
+      }
+    ],
+    "usage": {
+      "input_tokens": 16,
+      "output_tokens": 32
+    }
+  }
+}

@@ -1,0 +1,43 @@
+name: install-docs-lint
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: install-docs lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install project (dev extras)
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install ".[dev]"
+
+      - name: Lint script + install tests with ruff
+        run: |
+          ruff format --check tools tests/install
+          ruff check tools tests/install
+
+      - name: Check install docs (connector parity, schema, snippet parse)
+        env:
+          PYTHONPATH: ${{ github.workspace }}/src
+        run: python tools/check_install_docs.py --repo-root .
+
+      - name: Run install-doc and skill tests
+        env:
+          PYTHONPATH: ${{ github.workspace }}/src
+        run: pytest tests/install tests/skills -m "not network and not benchmark"
